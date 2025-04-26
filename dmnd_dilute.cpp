@@ -75,6 +75,7 @@ struct Spin : public Cell<1> {
 };
 
 struct Plaq : public Cell<2> {
+    bool visited = false;
 };
 
 struct Vol : public Cell<3> {
@@ -170,29 +171,36 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
 }
 
 
-inline std::vector<std::set<Vol*>> find_connected_components(Lattice& lat){
-    // greedy algorithm -- traverse via all boundaries recursively
-    std::stack<Vol*> vols;
+template<typename T>
+concept Visitable = requires(T t) {
+    { t.visited } -> std::same_as<bool&>;
+};
 
-    for (auto& [_,v] : lat.vols){
+template<Visitable T>
+inline std::vector<std::set<T*>> find_connected(std::map<sl_t, T*>& elems){
+    // greedy algorithm -- traverse via all boundaries recursively
+    std::stack<T*> stack;
+
+    // mark all unvisited
+    for (auto& [_, v] : elems){
         v->visited = false;
     }
 
-    std::vector<std::set<Vol*>> retval;
+    std::vector<std::set<T*>> retval;
 
-    for (auto& [_,v] : lat.vols){
+    for (auto& [_, v] : elems){
         if (!v->visited){
             retval.push_back({});
             // start a DFS
-            vols.push(v);
-            while(!vols.empty()){
-                auto curr =vols.top();
+            stack.push(v);
+            while(!stack.empty()){
+                auto curr = stack.top();
                 retval.back().insert(curr);
-                vols.pop();
+                stack.pop();
                 curr->visited = true;
-                for(auto v2 :  get_neighbours<Vol>(curr)){
-                    if (! v2->visited ){
-                        vols.push(v2);
+                for(auto v2 : get_neighbours<T>(curr)){
+                    if (!v2->visited){
+                        stack.push(v2);
                     }
                 }
             }
@@ -202,13 +210,21 @@ inline std::vector<std::set<Vol*>> find_connected_components(Lattice& lat){
     return retval;
 }
 
+// trivial instantiations
+inline std::vector<std::set<Vol*>> find_connected_vols(Lattice& lat){
+    return find_connected<Vol>(lat.vols);
+}
+
+inline std::vector<std::set<Plaq*>> find_connected_plaqs(Lattice& lat){
+    return find_connected<Plaq>(lat.plaqs);
+}
+
 void sort_and_remove_duplicates(std::vector<int>& v){
     // Sort all of these so we don't muck up any indexing
     std::sort(v.begin(), v.end());
     // silently remove any duplicates
     v.erase( unique( v.begin(), v.end() ), v.end() );
 }
-
 
 // Deletes specified spin ids from the lattice
 // Returns a std::set of Point* of 3 or less-member tetras
