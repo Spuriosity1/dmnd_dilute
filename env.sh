@@ -3,4 +3,5 @@
 source ${HOME}/.virtualenvironment/py/bin/activate
 
 alias visualise="python3 /Users/alaricsanders/mygh/lattice_indexing_lib/scripts/visualise.py"
+alias visualise_fury="python3 /Users/alaricsanders/mygh/lattice_indexing_lib/scripts/visualise_fury.py"
 export FIGURE_PATH="/Users/alaricsanders/Documents/gh-papers/DefectsInQSI/images/raw/"

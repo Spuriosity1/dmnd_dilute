@@ -1,69 +1,61 @@
 #include <cell_geometry.hpp>
 #include <argparse.hpp>
 #include <chain.hpp>
+#include <cstdio>
 #include <iostream>
 #include <lattice_IO.hpp>
 #include <preset_cellspecs.hpp>
 #include <UnitCellSpecifier.hpp>
 #include <algorithm>
+#include <queue>
 #include <random>
 #include <sstream>
 #include <stack>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <vector>
 #include <XoshiroCpp.hpp>
 /**
- * dmndlat, a utility for generating diamond lattices precisely
+ * Adds link disorder to a diaomnd lattice and removes any 
+ * even length intermediaries.
  */
 
 using namespace CellGeometry;
+using namespace nlohmann;
+using namespace std;
+
+template<typename T>
+inline std::string comma_separate(const char* pname, std::vector<T> v){
+    std::ostringstream oss;
+    oss<<pname;
+    char delim='=';
+    for (auto n : v){
+        oss << delim << n;
+        delim=','; 
+    }
+    oss << ";";
+    return oss.str();
+}
 
 
-void parse_supercell_spec(imat33_t& supercell_spec, std::string Z1_s, std::string Z2_s, std::string Z3_s){
+inline std::string parse_supercell_spec(imat33_t& supercell_spec, 
+        const argparse::ArgumentParser& prog){
 
-    std::stringstream Z1_ss(Z1_s);
-    std::stringstream Z2_ss(Z2_s);
-    std::stringstream Z3_ss(Z3_s);
+
+    auto Z1 = prog.get<vector<int>>("Z1");
+    auto Z2 = prog.get<vector<int>>("Z2");
+    auto Z3 = prog.get<vector<int>>("Z3");
+
+
     for (int row=0; row<3; row++){
-        Z1_ss >> supercell_spec(row,0);
-        Z2_ss >> supercell_spec(row,1);
-        Z3_ss >> supercell_spec(row,2);
-    }
-}
-
-
-
-inline std::string hash_parameters(
-        const std::string& Z1_s, 
-        const std::string& Z2_s, 
-        const std::string& Z3_s
-        ){
-    // hashing the arguments 
-    std::ostringstream name;
-    name << "Z1="+Z1_s+";Z2="+Z2_s+";Z3="+Z3_s+";";
-    auto s = name.str();
-    std::replace(s.begin(), s.end(), ' ', ',');  // replace space by commas
-    return s;
-}
-
-inline std::string hash_deletions(
-        const std::vector<int>& dlist
-        ){
-    std::stringstream name_ss;
-    if (dlist.size() > 0){
-        // hash the setup for naming
-        name_ss << "d1=";
-        auto sep = "";
-        for (const auto& j : dlist){
-            name_ss << sep << j;
-            sep = ",";
-        }
-        name_ss << ";";
+        supercell_spec(row,0) = Z1[row];
+        supercell_spec(row,1) = Z2[row];
+        supercell_spec(row,2) = Z3[row];
     }
 
-    return name_ss.str();
+    return comma_separate("Z1", Z1)
+         + comma_separate("Z2", Z2)
+         + comma_separate("Z3", Z3);
 }
 
 
@@ -84,37 +76,13 @@ struct Vol : public Cell<3> {
 
 typedef PeriodicVolLattice<Tetra, Spin, Plaq, Vol> Lattice;
 
-using namespace std;
 
-struct bfs_node {
+struct search_node {
     const Cell<0>* point;
     Chain<1> path;
 };
 
 
-
-template <typename T>
-std::vector<T*> get_neighbours(T* x0){
-    std::vector<T*> retval;
-    for (auto& [pl, m] : x0->boundary){
-        for (auto& [x1, _] : pl->coboundary){
-            if (x1 != x0) retval.push_back(static_cast<T*>(x1));
-        }
-    }
-    return retval;
-}
-
-
-template <typename T>
-std::vector<T*> get_coneighbours(T* x0){
-    std::vector<T*> retval;
-    for (auto& [pl, m] : x0->coboundary){
-        for (auto& [x1, _] : pl->boundary){
-            if (x1 != x0) retval.push_back(static_cast<T*>(x1));
-        }
-    }
-    return retval;
-}
 
 
 inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, Tetra* finish, unsigned len){
@@ -124,8 +92,8 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
     for (auto& l : lat.get_links()){
         l.visited = false;
     }
-    std::stack<bfs_node> to_visit;
-    to_visit.push(bfs_node(origin, Chain<1>()));
+    std::stack<search_node> to_visit;
+    to_visit.push(search_node(origin, Chain<1>()));
 
     Chain<0> expected_boundary;
     expected_boundary[origin] = 1;
@@ -162,11 +130,81 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
             Chain<1> this_ln; this_ln[l]=m;
             for (auto [p2, n] : d(this_ln)){
                 if (p2 != curr.point){ 
-                    to_visit.push(bfs_node(p2,curr.path + this_ln));
+                    to_visit.push(search_node(p2,curr.path + this_ln));
                 }
             }
         }
     }
+    return res;
+}
+
+
+
+
+void excise_path(Lattice& lat, Chain<1>& path, std::vector<ipos_t>& deleted_link_locs){
+    for (auto [l, _] : path){
+        deleted_link_locs.push_back(l->position);
+        auto s = static_cast<Spin*>(l);
+        if (lat.has_link(s)){
+            deleted_link_locs.push_back(s->position);
+            lat.erase_link(s);
+        }
+    }
+}
+
+inline std::vector<Chain<1>> find_defect_links(Lattice& lat, 
+        Tetra* origin, unsigned len ){
+    /** 
+     * Finds all paths of specified length(s) connecting origin to a 
+     * defect node and removes them from the lattice
+     * @param lat: the base lattice
+     * @param origin: the starting point
+     * @param lens_to_trim: the set of lattice-seps to delete 
+     * measured as the number of Tetras that are part of the path
+     * EXCLUDING start (len=1 correspnds to nearest-neighbour pyrochlore sites)
+     */
+
+    // ensure nothing is visited
+    for (auto& l : lat.get_links()){
+        l.visited = false;
+    }
+    std::queue<search_node> to_visit;
+    to_visit.push(search_node(origin, Chain<1>()));
+
+    std::vector<Chain<1>> res;
+    while (!to_visit.empty()){
+        auto& curr = to_visit.front();
+        cleanup_chain(curr.path);
+
+        // Check if we are at another defect point
+        if (curr.path.size() == len){
+            if (curr.point->coboundary.size() < 4){
+                // trimmable path: mark it for deletion
+                res.push_back(curr.path);
+            }
+            to_visit.pop(); // curr invalidated!
+            continue;
+        }
+
+
+#ifdef DEBUG
+        cout<<curr.point->position<<"\t| "<< curr.path.size() <<"     \t| "<< d(curr.path)<<"\n";
+#endif
+
+        for (const auto& [l, m] : curr.point->coboundary){
+            Spin* ln = static_cast<Spin*>(l);
+            if (ln->visited) continue;
+            ln->visited = true;
+            Chain<1> this_ln; this_ln[l]=m;
+            for (auto [p2, n] : d(this_ln)){
+                if (p2 != curr.point){ 
+                    to_visit.push(search_node(p2,curr.path + this_ln));
+                }
+            }
+        }
+        to_visit.pop();
+    }
+
     return res;
 }
 
@@ -245,31 +283,80 @@ void del_spins_get_dtetras(Lattice& lat, std::vector<Spin*>& spins_to_delete, st
 }
 
 
+void export_lattice(
+        const filesystem::path& path,
+        const Lattice& lat,
+        const std::vector<ipos_t>& deleted_link_locs
+        ){
+
+
+        cout<<"Saving lattice to \n"<<path<<std::endl;
+
+        json j = {};
+        write_data(lat, j); // write the lattice data to j
+
+        j["defect_link_locs"] = deleted_link_locs;
+
+        std::ofstream of(path); 
+        of << j;
+        of.close();
+}
+
+void export_stats(
+        const filesystem::path& path,
+        const Lattice& lat
+        ){
+    cout<<"Saving statistics to \n"<<path<<std::endl;
+    json j = {};
+    json counts = {};
+    counts["points"] = lat.points.size();
+    counts["links"] = lat.links.size();
+    counts["plaqs"] = lat.plaqs.size();
+    counts["vols"] = lat.vols.size();
+
+    j["counts"] = counts;
+
+
+    std::ofstream of(path); 
+    of << j;
+    of.close();
+
+
+}
+
+
 int main (int argc, const char *argv[]) {
 
     argparse::ArgumentParser prog("dmndlat");
-
     prog.add_argument("Z1")
-        .help("First lattice vector in primitive units (as space separated string)");
+        .help("First lattice vector in primitive units (as space separated string)")
+        .nargs(3)
+        .scan<'i', int>();
     prog.add_argument("Z2")
-        .help("First lattice vector in primitive units (as space separated string)");
+        .help("Second lattice vector in primitive units (as space separated string)")
+        .nargs(3)
+        .scan<'i', int>();
     prog.add_argument("Z3")
-        .help("First lattice vector in primitive units (as space separated string)");
+        .help("Third lattice vector in primitive units (as space separated string)")
+        .nargs(3)
+        .scan<'i', int>();
 
     std::string outdir;
     prog.add_argument("--output_dir", "-o")
         .help("Path to output")
         .required()
         .store_into(outdir);
-
     
     prog.add_argument("--verbosity")
         .scan<'i', int>()
         .default_value(0);
 
-    prog.add_argument("--neighbour")
+    std::vector<int> neighbours;
+    prog.add_argument("--neighbours")
         .scan<'i', int>()
-        .default_value(2);
+        .nargs(argparse::nargs_pattern::at_least_one)
+        .default_value<std::vector<int>>({2})
+        .store_into(neighbours);
     
     std::vector<int> spin_ids_to_delete;
     prog.add_argument("--delete_spins", "-d")
@@ -312,22 +399,18 @@ int main (int argc, const char *argv[]) {
         throw std::runtime_error("Cannot open outdir");
     }
 
-    string Z1_s = prog.get<string>("Z1");
-    string Z2_s = prog.get<string>("Z2");
-    string Z3_s = prog.get<string>("Z3");
 
+    std::stringstream name; // accumulates hashed options
 
     // parse L1 L2 L3
     imat33_t supercell_spec;
-    parse_supercell_spec(supercell_spec, Z1_s, Z2_s, Z3_s);
+    name << parse_supercell_spec(supercell_spec, prog);
     std::cout<<"Constructing supercell of dimensions \n"<<supercell_spec<<std::endl;
 
     const PrimitiveSpecifers::Diamond spec;
-    std::stringstream name;
-    name << hash_parameters(Z1_s, Z2_s, Z3_s);
+ 
+    name << comma_separate("nn", neighbours);
 
-    auto neighbour = prog.get<int>("--neighbour");
-    name <<"nn="<< neighbour << ";";
 
     Lattice lat(spec, supercell_spec);
 
@@ -339,7 +422,7 @@ int main (int argc, const char *argv[]) {
         for (auto& x : spin_ids_to_delete){
             spins_to_yeet.push_back(lat.links.at(x));
         }
-        name << hash_deletions(spin_ids_to_delete);
+        name << comma_separate("d1", spin_ids_to_delete);
     }
 
     // Erase the randomly chosen spins
@@ -349,16 +432,15 @@ int main (int argc, const char *argv[]) {
     std::bernoulli_distribution d1(dilution_prob);
 
     if (dilution_prob > 0){
-        std::cout << "Erasing RANDOM spins (p="<<dilution_prob<<")\n";
+        char buf[1024]; snprintf(buf, 1024, "p=%.04f;", dilution_prob);
         for (const auto& [_, p] : lat.links) {
             if (d1(gen)) spins_to_yeet.push_back(p);
         }
-        name<<"p="<<dilution_prob<<";";
+        name<<buf;
     }
 
     std::set<Tetra*> defect_tetras;
     del_spins_get_dtetras(lat, spins_to_yeet, defect_tetras);
-
 
     auto verbosity = prog.get<int>("--verbosity");
     lat.print_state(verbosity);
@@ -380,50 +462,40 @@ int main (int argc, const char *argv[]) {
     // note that link erasures are guaranteed not to delete any points.
     vector<Tetra*> defect_tetras_vec(defect_tetras.begin(), defect_tetras.end());
 
-    unsigned total_n = defect_tetras_vec.size() * (defect_tetras_vec.size() -1)/2;
-    unsigned print_counter = 0ul;
+    unsigned total_n = defect_tetras_vec.size();
 
     std::vector<ipos_t> deleted_link_locs;
-    for (unsigned i=0; i<defect_tetras_vec.size(); i++){
-        for (unsigned j=0; j<i; j++){
-            auto t1 = defect_tetras_vec[i];
-            auto t2 = defect_tetras_vec[j];
-
-            auto links = find_paths_neighbours(lat, t1, t2, neighbour);
-#ifdef DEBUG
-            std::cout<<"("<<t1->position<<", "<<t2->position<<")\n";
-            std::cout<<" connection size: "<<links.size()<<std::endl;
-#endif
+    for (auto len : neighbours){
+        printf("[search] finding %d neighbours\n", len);
+        unsigned print_counter = 0ul;
+        for (auto t1 : defect_tetras_vec){
+            auto links = find_defect_links(lat, t1, len);
             for (auto path : links){
-                for (auto [l, _] : path){
-                    auto s = static_cast<Spin*>(l);
-                    if (lat.has_link(s)){
-                        deleted_link_locs.push_back(s->position);
-                        lat.erase_link(s);
-                    }
-                }
+                excise_path(lat, path, deleted_link_locs);
             }
             if (print_counter % 100 == 0){
-                printf("%5d / %5d (%02d%%)\r", print_counter, total_n, print_counter * 100 / total_n);
+                printf("%5d / %5d (%02d%%)\r", print_counter, total_n,
+                        print_counter * 100 / total_n);
+                fflush(stdout);
             }
             print_counter++;
+            
         }
+
+        printf("\n");
     }
-    printf("\n");
 
-    auto path = outpath/(name.str()+".lat.json");
+    // Counting complete, output observables
+    // Simple ones: raw counts
+
+    auto statpath = outpath/(name.str()+".stats.json");
+    export_stats(statpath, lat);
+
+
+    auto latpath = outpath/(name.str()+".lat.json");
     if (prog.get<bool>("--save_lattice")){
-        cout<<"Saving to "<<path<<std::endl;
-
-        using namespace nlohmann;
-        json j = {};
-        write_data(lat, j); // write the lattice data
-        std::ofstream of(path); 
-        of << j;
-        of.close();
-        j["defect_link_locs"] = deleted_link_locs;
+        export_lattice(latpath, lat, deleted_link_locs);
     }
     return 0;
 }
-
 
