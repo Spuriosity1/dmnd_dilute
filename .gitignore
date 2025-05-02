@@ -1,3 +1,4 @@
 .cache
 .ignore
 .DS_Store
+env.sh
