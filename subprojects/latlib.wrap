@@ -1,0 +1,4 @@
+[wrap-git]
+directory = latlib
+url = https://github.com/Spuriosity1/latticelab.git
+revision = head 
