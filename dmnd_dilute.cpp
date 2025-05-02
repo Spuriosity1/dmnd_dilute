@@ -2,8 +2,10 @@
 #include <argparse.hpp>
 #include <chain.hpp>
 #include <cstdio>
+#include <filesystem>
 #include <iostream>
 #include <lattice_IO.hpp>
+#include <ostream>
 #include <preset_cellspecs.hpp>
 #include <UnitCellSpecifier.hpp>
 #include <algorithm>
@@ -304,9 +306,13 @@ void export_lattice(
 
 void export_stats(
         const filesystem::path& path,
-        const Lattice& lat
+        const Lattice& lat,
+        const std::vector<std::set<Plaq*>> connected_plaqs,
+        const std::vector<std::set<Vol*>> connected_vols
         ){
     cout<<"Saving statistics to \n"<<path<<std::endl;
+
+
     json j = {};
     json counts = {};
     counts["points"] = lat.points.size();
@@ -317,11 +323,15 @@ void export_stats(
     j["counts"] = counts;
 
 
+    json percolstats = {};
+    percolstats["n_plaq_parts"] = connected_plaqs.size();
+    percolstats["n_vol_parts"] = connected_vols.size();
+    j["percolation"] = percolstats;
+
+
     std::ofstream of(path); 
     of << j;
     of.close();
-
-
 }
 
 
@@ -374,6 +384,7 @@ int main (int argc, const char *argv[]) {
     prog.add_argument("--seed")
         .help("64-bit int to seed the RNG")
         .scan<'x', uint64_t>()
+        .default_value(0)
         .store_into(seed);
 
     prog.add_argument("--save_lattice")
@@ -431,12 +442,26 @@ int main (int argc, const char *argv[]) {
  
     std::bernoulli_distribution d1(dilution_prob);
 
-    if (dilution_prob > 0){
-        char buf[1024]; snprintf(buf, 1024, "p=%.04f;", dilution_prob);
-        for (const auto& [_, p] : lat.links) {
-            if (d1(gen)) spins_to_yeet.push_back(p);
-        }
-        name<<buf;
+    for (const auto& [_, p] : lat.links) {
+        if (d1(gen)) spins_to_yeet.push_back(p);
+    }
+
+    char buf[1024];
+    snprintf(buf, 1024, "p=%.04f;seed=%llx;", dilution_prob, seed);
+    name<<buf;
+
+    // Name now fully specified
+    auto statpath = outpath/(name.str()+".stats.json");
+    auto latpath = outpath/(name.str()+".lat.json");
+
+    // Check if these files already exist, if so abort early
+    if ( !prog.get<bool>("--save_lattice") && filesystem::exists(statpath)){
+        cerr << "Statfile " << statpath << "already exists" << std::endl;
+        throw std::runtime_error("Statfile exists");
+    }
+    if ( prog.get<bool>("--save_lattice") && filesystem::exists(latpath)){
+        cerr << "latfile " << latpath << "already exists" << std::endl;
+        throw std::runtime_error("Latfile exists");
     }
 
     std::set<Tetra*> defect_tetras;
@@ -473,11 +498,9 @@ int main (int argc, const char *argv[]) {
             for (auto path : links){
                 excise_path(lat, path, deleted_link_locs);
             }
-            if (print_counter % 100 == 0){
-                printf("%5d / %5d (%02d%%)\r", print_counter, total_n,
-                        print_counter * 100 / total_n);
-                fflush(stdout);
-            }
+            printf("%5d / %5d (%02d%%)\r", print_counter, total_n,
+                    print_counter * 100 / total_n);
+            fflush(stdout); 
             print_counter++;
             
         }
@@ -485,17 +508,21 @@ int main (int argc, const char *argv[]) {
         printf("\n");
     }
 
-    // Counting complete, output observables
-    // Simple ones: raw counts
-
-    auto statpath = outpath/(name.str()+".stats.json");
-    export_stats(statpath, lat);
-
-
-    auto latpath = outpath/(name.str()+".lat.json");
     if (prog.get<bool>("--save_lattice")){
         export_lattice(latpath, lat, deleted_link_locs);
     }
+
+    // Counting complete, output observables
+    // Simple ones: raw counts
+
+    // more complex: connected components 
+    auto connected_plaqs = find_connected_plaqs(lat);
+    auto connected_vols = find_connected_vols(lat);
+
+
+    export_stats(statpath, lat, connected_plaqs, connected_vols);
+
+
     return 0;
 }
 
