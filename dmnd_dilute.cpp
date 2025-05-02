@@ -380,11 +380,10 @@ int main (int argc, const char *argv[]) {
         .help("Probability of deleting spin i")
         .store_into(dilution_prob);
 
-    uint64_t seed;
+    uint64_t seed = 0;
     prog.add_argument("--seed")
         .help("64-bit int to seed the RNG")
         .scan<'x', uint64_t>()
-        .default_value(0)
         .store_into(seed);
 
     prog.add_argument("--save_lattice")
@@ -450,16 +449,18 @@ int main (int argc, const char *argv[]) {
     snprintf(buf, 1024, "p=%.04f;seed=%llx;", dilution_prob, seed);
     name<<buf;
 
+    bool save_lattice = prog.get<bool>("--save_lattice");
+
     // Name now fully specified
     auto statpath = outpath/(name.str()+".stats.json");
     auto latpath = outpath/(name.str()+".lat.json");
 
     // Check if these files already exist, if so abort early
-    if ( !prog.get<bool>("--save_lattice") && filesystem::exists(statpath)){
+    if ( !save_lattice && filesystem::exists(statpath)){
         cerr << "Statfile " << statpath << "already exists" << std::endl;
         throw std::runtime_error("Statfile exists");
     }
-    if ( prog.get<bool>("--save_lattice") && filesystem::exists(latpath)){
+    if ( save_lattice && filesystem::exists(latpath)){
         cerr << "latfile " << latpath << "already exists" << std::endl;
         throw std::runtime_error("Latfile exists");
     }
@@ -508,7 +509,7 @@ int main (int argc, const char *argv[]) {
         printf("\n");
     }
 
-    if (prog.get<bool>("--save_lattice")){
+    if (save_lattice){
         export_lattice(latpath, lat, deleted_link_locs);
     }
 
