@@ -380,11 +380,11 @@ int main (int argc, const char *argv[]) {
         .help("Probability of deleting spin i")
         .store_into(dilution_prob);
 
-    uint64_t seed = 0;
+    std::string seed_s;
     prog.add_argument("--seed")
         .help("64-bit int to seed the RNG")
-        .scan<'x', uint64_t>()
-        .store_into(seed);
+        .store_into(seed_s);
+
 
     prog.add_argument("--save_lattice")
         .help("Flag to save the full lattice file")
@@ -408,6 +408,12 @@ int main (int argc, const char *argv[]) {
     if (! filesystem::exists(outpath) ){
         throw std::runtime_error("Cannot open outdir");
     }
+
+
+    uint64_t seed; // ugly hack
+    std::stringstream ss;
+    ss << std::hex << seed_s;
+    ss >> seed;
 
 
     std::stringstream name; // accumulates hashed options
