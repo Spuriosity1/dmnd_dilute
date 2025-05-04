@@ -16,7 +16,6 @@ NUM_THREADS=$2
 
 # PLANFILE should be in shell script format,
 # ../bin/executable arg1 arg2 ...
-
 arr=()
 while IFS= read -r line; do
    arr+=("$line")
