@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cell_geometry.hpp>
 #include <argparse.hpp>
 #include <chain.hpp>
@@ -140,14 +141,14 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
     return res;
 }
 
-
-
-
-void excise_path(Lattice& lat, Chain<1>& path, std::vector<ipos_t>& deleted_link_locs){
+void excise_path(Lattice& lat, Chain<1>& path, std::set<void*>& deleted_link_ptrs, std::vector<ipos_t>& deleted_link_locs){
     for (auto [l, _] : path){
         deleted_link_locs.push_back(l->position);
+        deleted_link_ptrs.insert(l);
         auto s = static_cast<Spin*>(l);
-        if (lat.has_link(s)){
+        //if (lat.has_link(s)){
+        if (!deleted_link_ptrs.contains(s)){
+            //assert(lat.has_link(s));
             deleted_link_locs.push_back(s->position);
             lat.erase_link(s);
         }
@@ -304,6 +305,44 @@ void export_lattice(
         of.close();
 }
 
+
+inline json latstats_to_json(const Lattice& lat){
+    json counts = {};
+    counts["points"] = lat.points.size();
+    counts["links"] = lat.links.size();
+    counts["plaqs"] = lat.plaqs.size();
+    counts["vols"] = lat.vols.size();
+
+    return counts;
+}
+
+template <typename T>
+inline std::vector<size_t> get_sorted_sizes(const std::vector<std::set<T>>& parts ){
+    std::vector<size_t> size_set;
+    for (const auto& p : parts){
+        auto size = p.size();
+        auto it = std::lower_bound(size_set.begin(), size_set.end(), size);
+        size_set.insert(it, size);
+    }
+    return size_set;
+}
+
+inline json percolstats_to_json(
+        const std::vector<std::set<Plaq*>> connected_plaqs,
+        const std::vector<std::set<Vol*>> connected_vols
+        ) {
+
+    json percolstats = {};
+    percolstats["n_plaq_parts"] = connected_plaqs.size();
+    percolstats["plaq_part_nelem"] = get_sorted_sizes(connected_plaqs);
+
+    percolstats["n_vol_parts"] = connected_vols.size();
+    percolstats["vol_part_nelem"] = get_sorted_sizes(connected_vols);
+    return percolstats;
+}
+
+
+
 void export_stats(
         const filesystem::path& path,
         const Lattice& lat,
@@ -314,20 +353,10 @@ void export_stats(
 
 
     json j = {};
-    json counts = {};
-    counts["points"] = lat.points.size();
-    counts["links"] = lat.links.size();
-    counts["plaqs"] = lat.plaqs.size();
-    counts["vols"] = lat.vols.size();
-
-    j["counts"] = counts;
 
 
-    json percolstats = {};
-    percolstats["n_plaq_parts"] = connected_plaqs.size();
-    percolstats["n_vol_parts"] = connected_vols.size();
-    j["percolation"] = percolstats;
-
+    j["counts"] = latstats_to_json(lat);
+    j["percolation"] = percolstats_to_json(connected_plaqs, connected_vols);
 
     std::ofstream of(path); 
     of << j;
@@ -502,8 +531,9 @@ int main (int argc, const char *argv[]) {
         unsigned print_counter = 0ul;
         for (auto t1 : defect_tetras_vec){
             auto links = find_defect_links(lat, t1, len);
+            std::set<void*> deleted_link_ptrs;
             for (auto path : links){
-                excise_path(lat, path, deleted_link_locs);
+                excise_path(lat, path, deleted_link_ptrs, deleted_link_locs);
             }
             printf("%5d / %5d (%02d%%)\r", print_counter, total_n,
                     print_counter * 100 / total_n);
