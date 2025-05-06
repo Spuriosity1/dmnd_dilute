@@ -71,10 +71,12 @@ struct Spin : public Cell<1> {
 
 struct Plaq : public Cell<2> {
     bool visited = false;
+    const Plaq* root = nullptr;
 };
 
 struct Vol : public Cell<3> {
     bool visited = false;
+    const Vol* root = nullptr;
 };
 
 typedef PeriodicVolLattice<Tetra, Spin, Plaq, Vol> Lattice;
@@ -214,34 +216,53 @@ inline std::vector<Chain<1>> find_defect_links(Lattice& lat,
 
 template<typename T>
 concept Visitable = requires(T t) {
-    { t.visited } -> std::same_as<bool&>;
+    // { t.visited } -> std::same_as<bool&>;
+    { t.root } -> std::same_as<const T*&>;
 };
 
 template<Visitable T>
-inline std::vector<std::set<T*>> find_connected(std::map<sl_t, T*>& elems){
-    // greedy algorithm -- traverse via all boundaries recursively
+struct conn_components {
+    std::set<T*> elems;
+    bool wraps = false;
+};
+
+template<Visitable T>
+inline std::vector<conn_components<T>> find_connected(std::map<sl_t, T*>& elems){
+    /**
+     * Starting from all points, either start a new cluster or expand cluster
+     * until unable.
+     */
     std::stack<T*> stack;
 
     // mark all unvisited
     for (auto& [_, v] : elems){
-        v->visited = false;
+         // v->visited = false;
+        v->root = nullptr;
     }
 
-    std::vector<std::set<T*>> retval;
+    std::vector<conn_components<T>> retval;
 
-    for (auto& [_, v] : elems){
-        if (!v->visited){
-            retval.push_back({});
-            // start a DFS
-            stack.push(v);
-            while(!stack.empty()){
-                auto curr = stack.top();
-                retval.back().insert(curr);
-                stack.pop();
-                curr->visited = true;
-                for(auto v2 : get_neighbours<T>(curr)){
-                    if (!v2->visited){
-                        stack.push(v2);
+    for (auto& [_, root] : elems){
+        if (root->root != nullptr) continue;
+
+        retval.push_back({});
+        // start a DFS
+        stack.push(root);
+        while(!stack.empty()){
+            auto curr = stack.top();
+            retval.back().elems.insert(curr);
+            stack.pop();
+            curr->root = root;
+            for(auto next : get_neighbours<T>(curr)){
+                if (next->root == nullptr){
+                    stack.push(next);
+                } else if (next->root == root) {
+                    // we have linked with the hive! Check if it was around a boundary -
+                    auto dx1 = curr->position - root->position;
+                    auto dx2 = next->position - root->position;
+                    rational::Rational r = dot(dx1, dx2);
+                    if ( r.num*r.denom < 0  ) {
+                        retval.back().wraps = true;
                     }
                 }
             }
@@ -249,15 +270,6 @@ inline std::vector<std::set<T*>> find_connected(std::map<sl_t, T*>& elems){
     }
 
     return retval;
-}
-
-// trivial instantiations
-inline std::vector<std::set<Vol*>> find_connected_vols(Lattice& lat){
-    return find_connected<Vol>(lat.vols);
-}
-
-inline std::vector<std::set<Plaq*>> find_connected_plaqs(Lattice& lat){
-    return find_connected<Plaq>(lat.plaqs);
 }
 
 void sort_and_remove_duplicates(std::vector<int>& v){
@@ -317,27 +329,38 @@ inline json latstats_to_json(const Lattice& lat){
 }
 
 template <typename T>
-inline std::vector<size_t> get_sorted_sizes(const std::vector<std::set<T>>& parts ){
+inline std::vector<size_t> get_sorted_sizes(const std::vector<conn_components<T>>& parts ){
     std::vector<size_t> size_set;
     for (const auto& p : parts){
-        auto size = p.size();
+        auto size = p.elems.size();
         auto it = std::lower_bound(size_set.begin(), size_set.end(), size);
         size_set.insert(it, size);
     }
     return size_set;
 }
 
+template <typename T>
+inline bool test_wraps(const std::vector<conn_components<T>>& parts ){
+    for (const auto& p : parts){
+        if (p.wraps) { return true; }
+    }
+    return false;
+}
+
+
 inline json percolstats_to_json(
-        const std::vector<std::set<Plaq*>> connected_plaqs,
-        const std::vector<std::set<Vol*>> connected_vols
+        const std::vector<conn_components<Plaq>> connected_plaqs,
+        const std::vector<conn_components<Vol>> connected_vols
         ) {
 
     json percolstats = {};
     percolstats["n_plaq_parts"] = connected_plaqs.size();
     percolstats["plaq_part_nelem"] = get_sorted_sizes(connected_plaqs);
+    percolstats["plaqs_wrap"] = test_wraps(connected_plaqs);
 
     percolstats["n_vol_parts"] = connected_vols.size();
     percolstats["vol_part_nelem"] = get_sorted_sizes(connected_vols);
+    percolstats["vols_wrap"] = test_wraps(connected_plaqs);
     return percolstats;
 }
 
@@ -346,8 +369,8 @@ inline json percolstats_to_json(
 void export_stats(
         const filesystem::path& path,
         const Lattice& lat,
-        const std::vector<std::set<Plaq*>> connected_plaqs,
-        const std::vector<std::set<Vol*>> connected_vols
+        const std::vector<conn_components<Plaq>> connected_plaqs,
+        const std::vector<conn_components<Vol>> connected_vols
         ){
     cout<<"Saving statistics to \n"<<path<<std::endl;
 
@@ -553,8 +576,8 @@ int main (int argc, const char *argv[]) {
     // Simple ones: raw counts
 
     // more complex: connected components 
-    auto connected_plaqs = find_connected_plaqs(lat);
-    auto connected_vols = find_connected_vols(lat);
+    auto connected_plaqs = find_connected(lat.plaqs);
+    auto connected_vols = find_connected(lat.vols);
 
 
     export_stats(statpath, lat, connected_plaqs, connected_vols);
