@@ -146,7 +146,6 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
 void excise_path(Lattice& lat, Chain<1>& path, std::set<void*>& deleted_link_ptrs, std::vector<ipos_t>& deleted_link_locs){
     for (auto [l, _] : path){
         deleted_link_locs.push_back(l->position);
-        deleted_link_ptrs.insert(l);
         auto s = static_cast<Spin*>(l);
         //if (lat.has_link(s)){
         if (!deleted_link_ptrs.contains(s)){
@@ -154,6 +153,7 @@ void excise_path(Lattice& lat, Chain<1>& path, std::set<void*>& deleted_link_ptr
             deleted_link_locs.push_back(s->position);
             lat.erase_link(s);
         }
+        deleted_link_ptrs.insert(l);
     }
 }
 
@@ -242,24 +242,24 @@ inline std::vector<conn_components<T>> find_connected(std::map<sl_t, T*>& elems)
 
     std::vector<conn_components<T>> retval;
 
-    for (auto& [_, root] : elems){
-        if (root->root != nullptr) continue;
+    for (auto& [_, root_cell] : elems){
+        if (root_cell->root != nullptr) continue;
 
         retval.push_back({});
         // start a DFS
-        stack.push(root);
+        stack.push(root_cell);
         while(!stack.empty()){
             auto curr = stack.top();
             retval.back().elems.insert(curr);
             stack.pop();
-            curr->root = root;
+            curr->root = root_cell;
             for(auto next : get_neighbours<T>(curr)){
                 if (next->root == nullptr){
                     stack.push(next);
-                } else if (next->root == root) {
+                } else if (next->root == root_cell) {
                     // we have linked with the hive! Check if it was around a boundary -
-                    auto dx1 = curr->position - root->position;
-                    auto dx2 = next->position - root->position;
+                    auto dx1 = curr->position - root_cell->position;
+                    auto dx2 = next->position - root_cell->position;
                     rational::Rational r = dot(dx1, dx2);
                     if ( r.num*r.denom < 0  ) {
                         retval.back().wraps = true;
