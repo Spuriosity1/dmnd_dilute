@@ -16,8 +16,10 @@
 #include <stack>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include <XoshiroCpp.hpp>
+#include "format_bits.hpp"
 /**
  * Adds link disorder to a diaomnd lattice and removes any 
  * even length intermediaries.
@@ -26,40 +28,6 @@
 using namespace CellGeometry;
 using namespace nlohmann;
 using namespace std;
-
-template<typename T>
-inline std::string comma_separate(const char* pname, std::vector<T> v){
-    std::ostringstream oss;
-    oss<<pname;
-    char delim='=';
-    for (auto n : v){
-        oss << delim << n;
-        delim=','; 
-    }
-    oss << ";";
-    return oss.str();
-}
-
-
-inline std::string parse_supercell_spec(imat33_t& supercell_spec, 
-        const argparse::ArgumentParser& prog){
-
-
-    auto Z1 = prog.get<vector<int>>("Z1");
-    auto Z2 = prog.get<vector<int>>("Z2");
-    auto Z3 = prog.get<vector<int>>("Z3");
-
-
-    for (int row=0; row<3; row++){
-        supercell_spec(row,0) = Z1[row];
-        supercell_spec(row,1) = Z2[row];
-        supercell_spec(row,2) = Z3[row];
-    }
-
-    return comma_separate("Z1", Z1)
-         + comma_separate("Z2", Z2)
-         + comma_separate("Z3", Z3);
-}
 
 
 struct Tetra : public Cell<0> {
@@ -230,7 +198,7 @@ struct conn_components {
 };
 
 template<Visitable T>
-inline std::vector<conn_components<T>> find_connected(std::map<sl_t, T*>& elems){
+inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T*>& elems){
     /**
      * Starting from all points, either start a new cluster or expand cluster
      * until unable.
@@ -285,21 +253,29 @@ void sort_and_remove_duplicates(std::vector<int>& v){
 // Deletes specified spin ids from the lattice
 // Returns a std::set of Point* of 3 or less-member tetras
 void del_spins_get_dtetras(Lattice& lat, std::vector<Spin*>& spins_to_delete, std::set<Tetra*>& defect_pts){
+    std::unordered_set<Spin*> present_spins;
+    for (auto& [_, l] : lat.links){
+        present_spins.insert(l);
+    }
     // make sure it's in order
     std::sort(spins_to_delete.begin(), spins_to_delete.end());
     // delete the spins
     for (auto i=spins_to_delete.rbegin(); i<spins_to_delete.rend(); i++){
         auto l = *i;
-        if (!lat.has_link(l)){
+        //if (!lat.has_link(l)){
+        if (!present_spins.contains(l)){
             throw std::out_of_range("Tried to delete spins at nonexistent index");
         }
         for (const auto& [p, _] : l->boundary){
             defect_pts.insert(static_cast<Tetra*>(p));
         }
         lat.erase_link(l);
+        present_spins.erase(l);
     }
 }
 
+/////////////////////////////////
+/// EXPORTING TO FILE ///////////
 
 void export_lattice(
         const filesystem::path& path,

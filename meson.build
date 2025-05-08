@@ -10,11 +10,14 @@ endif
 
 latlib_dep = dependency('liblatindex')
 
-
-sources = files('dmnd_dilute.cpp')
-
-
-diluter_bin = executable('dmnd_dilute', sources,
+diluter_bin = executable('dmnd_dilute', 
+  files('dmnd_dilute.cpp'),
   dependencies: latlib_dep,
   include_directories: 'include'
   )
+
+#diluter_nd_bin = executable('dmnd_dilute_nodelete',
+#  files('dmnd_dilute_nodelete.cpp'),
+#  dependencies: latlib_dep,
+#  include_directories: 'include'
+#  )
