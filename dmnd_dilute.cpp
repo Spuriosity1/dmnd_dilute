@@ -66,7 +66,8 @@ struct Tetra : public Cell<0> {
 };
 
 struct Spin : public Cell<1> {
-    bool visited = false;
+    //bool visited = false;
+    Tetra* origin = nullptr;
 };
 
 struct Plaq : public Cell<2> {
@@ -89,7 +90,7 @@ struct search_node {
 
 
 
-
+/*
 inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, Tetra* finish, unsigned len){
     // finds all chains of length 'len' connecting p0 to p1
 
@@ -142,22 +143,22 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
     }
     return res;
 }
+*/
 
 void excise_path(Lattice& lat, Chain<1>& path, std::set<void*>& deleted_link_ptrs, std::vector<ipos_t>& deleted_link_locs){
     for (auto [l, _] : path){
-        deleted_link_locs.push_back(l->position);
         auto s = static_cast<Spin*>(l);
         //if (lat.has_link(s)){
         if (!deleted_link_ptrs.contains(s)){
-            //assert(lat.has_link(s));
+//            assert(lat.has_link(s));
             deleted_link_locs.push_back(s->position);
             lat.erase_link(s);
+            deleted_link_ptrs.insert(s);
         }
-        deleted_link_ptrs.insert(l);
     }
 }
 
-inline std::vector<Chain<1>> find_defect_links(Lattice& lat, 
+inline std::vector<Chain<1>> find_defect_links(
         Tetra* origin, unsigned len ){
     /** 
      * Finds all paths of specified length(s) connecting origin to a 
@@ -169,37 +170,39 @@ inline std::vector<Chain<1>> find_defect_links(Lattice& lat,
      * EXCLUDING start (len=1 correspnds to nearest-neighbour pyrochlore sites)
      */
 
+    /*
     // ensure nothing is visited
     for (auto& l : lat.get_links()){
-        l.visited = false;
+        //l.visited = false;
     }
+    */
+
     std::queue<search_node> to_visit;
     to_visit.push(search_node(origin, Chain<1>()));
 
     std::vector<Chain<1>> res;
     while (!to_visit.empty()){
         auto& curr = to_visit.front();
-        cleanup_chain(curr.path);
 
         // Check if we are at another defect point
         if (curr.path.size() == len){
             if (curr.point->coboundary.size() < 4){
                 // trimmable path: mark it for deletion
+                cleanup_chain(curr.path);
                 res.push_back(curr.path);
             }
             to_visit.pop(); // curr invalidated!
             continue;
         }
 
-
+        assert (curr.path.size() < len);
 #ifdef DEBUG
         cout<<curr.point->position<<"\t| "<< curr.path.size() <<"     \t| "<< d(curr.path)<<"\n";
 #endif
-
         for (const auto& [l, m] : curr.point->coboundary){
             Spin* ln = static_cast<Spin*>(l);
-            if (ln->visited) continue;
-            ln->visited = true;
+            if (ln->origin == origin) continue;
+            ln->origin = origin;
             Chain<1> this_ln; this_ln[l]=m;
             for (auto [p2, n] : d(this_ln)){
                 if (p2 != curr.point){ 
@@ -409,12 +412,17 @@ int main (int argc, const char *argv[]) {
         .required()
         .store_into(outdir);
     
-    prog.add_argument("--verbosity")
+    prog.add_argument("--verbosity", "-v")
         .scan<'i', int>()
         .default_value(0);
 
+    prog.add_argument("--force", "-f")
+        .help("Overwrites output files")
+        .default_value(false)
+        .implicit_value(true);
+
     std::vector<int> neighbours;
-    prog.add_argument("--neighbours")
+    prog.add_argument("--neighbours", "-n")
         .scan<'i', int>()
         .nargs(argparse::nargs_pattern::at_least_one)
         .default_value<std::vector<int>>({2})
@@ -436,7 +444,6 @@ int main (int argc, const char *argv[]) {
     prog.add_argument("--seed")
         .help("64-bit int to seed the RNG")
         .store_into(seed_s);
-
 
     prog.add_argument("--save_lattice")
         .help("Flag to save the full lattice file")
@@ -513,14 +520,16 @@ int main (int argc, const char *argv[]) {
     auto statpath = outpath/(name.str()+".stats.json");
     auto latpath = outpath/(name.str()+".lat.json");
 
-    // Check if these files already exist, if so abort early
-    if ( !save_lattice && filesystem::exists(statpath)){
-        cerr << "Statfile " << statpath << "already exists" << std::endl;
-        throw std::runtime_error("Statfile exists");
-    }
-    if ( save_lattice && filesystem::exists(latpath)){
-        cerr << "latfile " << latpath << "already exists" << std::endl;
-        throw std::runtime_error("Latfile exists");
+    if (!prog.get<bool>("--force")){
+        // Check if these files already exist, if so abort early
+        if ( !save_lattice && filesystem::exists(statpath)){
+            cerr << "Statfile " << statpath << "already exists" << std::endl;
+            throw std::runtime_error("Statfile exists");
+        }
+        if ( save_lattice && filesystem::exists(latpath)){
+            cerr << "latfile " << latpath << "already exists" << std::endl;
+            throw std::runtime_error("Latfile exists");
+        }
     }
 
     std::set<Tetra*> defect_tetras;
@@ -549,15 +558,23 @@ int main (int argc, const char *argv[]) {
     unsigned total_n = defect_tetras_vec.size();
 
     std::vector<ipos_t> deleted_link_locs;
+
+    // initialise the spins to have nullptr roots
+    for (auto& [_, s] : lat.links){
+        s->origin = nullptr;
+    }
+    
     for (auto len : neighbours){
         printf("[search] finding %d neighbours\n", len);
         unsigned print_counter = 0ul;
         for (auto t1 : defect_tetras_vec){
-            auto links = find_defect_links(lat, t1, len);
+            auto links = find_defect_links(t1, len);
             std::set<void*> deleted_link_ptrs;
+            
             for (auto path : links){
                 excise_path(lat, path, deleted_link_ptrs, deleted_link_locs);
             }
+            
             printf("%5d / %5d (%02d%%)\r", print_counter, total_n,
                     print_counter * 100 / total_n);
             fflush(stdout); 
@@ -567,6 +584,7 @@ int main (int argc, const char *argv[]) {
 
         printf("\n");
     }
+    
 
     if (save_lattice){
         export_lattice(latpath, lat, deleted_link_locs);
@@ -575,13 +593,13 @@ int main (int argc, const char *argv[]) {
     // Counting complete, output observables
     // Simple ones: raw counts
 
+    
     // more complex: connected components 
     auto connected_plaqs = find_connected(lat.plaqs);
     auto connected_vols = find_connected(lat.vols);
 
 
     export_stats(statpath, lat, connected_plaqs, connected_vols);
-
 
     return 0;
 }
