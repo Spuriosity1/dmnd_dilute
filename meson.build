@@ -1,7 +1,7 @@
 project('dilutedlat', ['cpp', 'c'],
   version: '1.0.0',
   meson_version : '>= 1.5.0',
-  default_options : [ 'warning_level=3', 'buildtype=debug', 'cpp_std=c++2a' ]
+  default_options : [ 'warning_level=3', 'buildtype=release', 'cpp_std=c++2a' ]
 )
 
 if get_option('buildtype') == 'release'

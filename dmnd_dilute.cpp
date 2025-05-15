@@ -370,15 +370,15 @@ int main (int argc, const char *argv[]) {
 
     argparse::ArgumentParser prog("dmndlat");
     prog.add_argument("Z1")
-        .help("First lattice vector in primitive units (as space separated string)")
+        .help("First lattice vector in primitive units (three integers) ")
         .nargs(3)
         .scan<'i', int>();
     prog.add_argument("Z2")
-        .help("Second lattice vector in primitive units (as space separated string)")
+        .help("Second lattice vector in primitive units (three integers)")
         .nargs(3)
         .scan<'i', int>();
     prog.add_argument("Z3")
-        .help("Third lattice vector in primitive units (as space separated string)")
+        .help("Third lattice vector in primitive units (three integers)")
         .nargs(3)
         .scan<'i', int>();
 
