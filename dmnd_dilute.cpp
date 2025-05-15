@@ -339,7 +339,7 @@ inline json percolstats_to_json(
 
     percolstats["n_vol_parts"] = connected_vols.size();
     percolstats["vol_part_nelem"] = get_sorted_sizes(connected_vols);
-    percolstats["vols_wrap"] = test_wraps(connected_plaqs);
+    percolstats["vols_wrap"] = test_wraps(connected_vols);
     return percolstats;
 }
 
