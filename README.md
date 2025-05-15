@@ -56,8 +56,8 @@ Optional arguments:
 # EXAMPLE USAGE
 ```bash
 $ mkdir -p ../tmp
-$ build/dmnd_dilute 4 0 0 0 4 0 0 0 4 -p 0.2 -o ../tmp --neighbours 2 4 --save_lattice
-$ python3 ../lattice_indexing_lib/scripts/visualise.py "../tmp/Z1=4,0,0;Z2=0,4,0;Z3=0,0,4;nn=2,4;p=0.2000;seed=0;.lat.json"
+$ build/dmnd_dilute 4 0 0 0 4 0 0 0 4 -p 0.1 -o ../tmp --neighbours 2 4 --save_lattice
+$ python3 ../lattice_indexing_lib/scripts/visualise.py "../tmp/Z1=4,0,0;Z2=0,4,0;Z3=0,0,4;nn=2,4;p=0.1000;seed=0;.lat.json" links plaqs
 ```
 
 Yes, it puts semicolons in filenames, and yes, I do regret it.
