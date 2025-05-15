@@ -28,17 +28,14 @@ $ ./dmnd_dilute -h
 ```
 which will print
 ```
-Usage: dmndlat [--help] [--version] --output_dir VAR [--verbosity VAR] [--force] [--neig
-hbours VAR...] [--delete_spins VAR...] [--dilution_prob VAR] [--seed VAR] [--save_lattic
-e] Z1 Z2 Z3
+Usage: dmndlat [--help] [--version] --output_dir VAR [--verbosity VAR] [--force] 
+[--neighbours VAR...] [--delete_spins VAR...] [--dilution_prob VAR] 
+[--seed VAR] [--save_lattice] Z1 Z2 Z3
 
 Positional arguments:
-  Z1                   First lattice vector in primitive units (three integers)  [nargs:
- 3] 
-  Z2                   Second lattice vector in primitive units (three integers) [nargs:
- 3] 
-  Z3                   Third lattice vector in primitive units (three integers) [nargs: 
-3] 
+  Z1                   First lattice vector in primitive units (three integers)  [nargs: 3] 
+  Z2                   Second lattice vector in primitive units (three integers) [nargs: 3] 
+  Z3                   Third lattice vector in primitive units (three integers) [nargs: 3] 
 
 Optional arguments:
   -h, --help           shows help message and exits 
@@ -55,9 +52,28 @@ Optional arguments:
 
 # EXAMPLE USAGE
 ```bash
-$ mkdir -p ../tmp
-$ build/dmnd_dilute 4 0 0 0 4 0 0 0 4 -p 0.1 -o ../tmp --neighbours 2 4 --save_lattice
-$ python3 ../lattice_indexing_lib/scripts/visualise.py "../tmp/Z1=4,0,0;Z2=0,4,0;Z3=0,0,4;nn=2,4;p=0.1000;seed=0;.lat.json" links plaqs
+mkdir -p ../tmp
+build/dmnd_dilute 4 0 0 0 4 0 0 0 4 -p 0.1 -o ../tmp --neighbours 2 4 --save_lattice
+# Constructing supercell of dimensions 
+# [4      0       0]
+# [0      4       0]
+# [0      0       4]
+# 
+# 128 points
+# 232 links
+# 142 plaqs
+# 41 vols
+# [search] finding 2 neighbours
+#    41 /    42 (97%)
+# [search] finding 4 neighbours
+#    41 /    42 (97%)
+# Saving lattice to 
+# "../tmp/Z1=4,0,0;Z2=0,4,0;Z3=0,0,4;nn=2,4;p=0.1000;seed=0;.lat.json"
+# Saving statistics to 
+# "../tmp/Z1=4,0,0;Z2=0,4,0;Z3=0,0,4;nn=2,4;p=0.1000;seed=0;.stats.json"
+#
+# (optional) visualise the outcome 
+python3 ../lattice_indexing_lib/scripts/visualise.py "../tmp/Z1=4,0,0;Z2=0,4,0;Z3=0,0,4;nn=2,4;p=0.1000;seed=0;.lat.json" links plaqs
 ```
 
 Yes, it puts semicolons in filenames, and yes, I do regret it.

@@ -458,7 +458,7 @@ int main (int argc, const char *argv[]) {
     name << parse_supercell_spec(supercell_spec, prog);
     std::cout<<"Constructing supercell of dimensions \n"<<supercell_spec<<std::endl;
 
-    const PrimitiveSpecifers::Diamond spec;
+    const auto spec = PrimitiveSpecifiers::DiamondSpec();
  
     name << comma_separate("nn", neighbours);
 
