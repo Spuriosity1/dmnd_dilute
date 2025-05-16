@@ -113,6 +113,29 @@ inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, 
 }
 */
 
+
+bool operator<(rational::Rational a, rational::Rational b){
+    a.make_denom_positive();
+    b.make_denom_positive();
+    return a.num * b.denom < b.num*a.denom;
+}
+
+
+bool operator>(rational::Rational a, rational::Rational b){
+    a.make_denom_positive();
+    b.make_denom_positive();
+    return a.num * b.denom > b.num*a.denom;
+}
+
+rational::Rational min(rational::Rational a, rational::Rational b){
+    return (a<b) ? a : b;
+}
+
+
+rational::Rational max(rational::Rational a, rational::Rational b){
+    return (a>b) ? a : b;
+}
+
 void excise_path(Lattice& lat, Chain<1>& path, std::set<void*>& deleted_link_ptrs, std::vector<ipos_t>& deleted_link_locs){
     for (auto [l, _] : path){
         auto s = static_cast<Spin*>(l);
@@ -198,7 +221,7 @@ struct conn_components {
 };
 
 template<Visitable T>
-inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T*>& elems){
+inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T*>& elems, const rational::Rational& Lmin2){
     /**
      * Starting from all points, either start a new cluster or expand cluster
      * until unable.
@@ -229,10 +252,8 @@ inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T
                     stack.push(next);
                 } else if (next->root == root_cell) {
                     // we have linked with the hive! Check if it was around a boundary -
-                    auto dx1 = curr->position - root_cell->position;
-                    auto dx2 = next->position - root_cell->position;
-                    rational::Rational r = dot(dx1, dx2);
-                    if ( r.num*r.denom < 0  ) {
+                    auto dx1 = curr->position - next->position;
+                    if (dot(dx1, dx1) > Lmin2/4){
                         retval.back().wraps = true;
                     }
                 }
@@ -569,10 +590,18 @@ int main (int argc, const char *argv[]) {
     // Counting complete, output observables
     // Simple ones: raw counts
 
+    rational::Rational l2[3] = {0,0,0};
+    for (int i=0; i<3; i++){
+        for (int j=0; j<3; j++){
+            l2[i] += lat.cell_vectors(j,i)*lat.cell_vectors(j,i);
+        }
+        assert(l2[i].num>0);
+    }
+    rational::Rational Lmin2 = min(l2[0], min(l2[1],l2[2]));
     
     // more complex: connected components 
-    auto connected_plaqs = find_connected(lat.plaqs);
-    auto connected_vols = find_connected(lat.vols);
+    auto connected_plaqs = find_connected(lat.plaqs, Lmin2);
+    auto connected_vols = find_connected(lat.vols, Lmin2);
 
 
     export_stats(statpath, lat, connected_plaqs, connected_vols);
