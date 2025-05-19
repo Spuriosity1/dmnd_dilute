@@ -46,7 +46,7 @@ def main():
     p_values = np.arange(p_start, p_stop + 0.5 * p_step, p_step)
 
     L_start, L_step, L_stop = args.L_range
-    L_values = np.arange(L_start, L_stop + 0.5 * L_step, L_step)
+    L_values = np.arange(L_start, L_stop + L_step, L_step, dtype=int)
 
     # Prepare delete_nn arguments if provided
     delete_nn_args = ""
