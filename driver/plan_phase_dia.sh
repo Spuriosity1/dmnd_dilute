@@ -3,19 +3,18 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 
 # Check if the user provided an input file
-if [ "$#" -lt 4 ]; then
+if [ "$#" -lt 3 ]; then
     #                1                 2              3       4   5
-    echo "Usage: $0 <seeds_per_point> <inital_seedid> <L> <db_repo> <auxiliary args>"
+    echo "Usage: $0 <seeds_per_point>  <L> <db_repo> <auxiliary args>"
     exit 1
 fi
 
 
 seeds_per_point="$1"
-index="$2"
-L="$3"
-DB_REPO="${4}"
+L="$2"
+DB_REPO="${3}"
+auxargs="${4}"
 
-seedfile="${SCRIPT_DIR}/seeds.txt"
 
 if [ ! -d "${DB_REPO}" ]; then
     echo "Error: specified db repo does not exist. Create?"
@@ -27,17 +26,12 @@ if [ ! -d "${DB_REPO}" ]; then
     esac
 fi
 
-max_seed=`wc -l < "${seedfile}"`
 
 for p in `seq 0 0.01 0.1`; do
     for i in `seq 0 "${seeds_per_point}"`; do
 
-        if [ $index -ge "${max_seed}" ]; then
-            echo "Reached end of seed file!"
-            exit 1
-        fi
-        seed=`sed "${index}q;d" "${seedfile}" | sed 's/ //g'` 
-        echo ../build/dmnd_dilute $L 0 0 0 $L 0 0 0 $L -p $p -o "${DB_REPO}" --seed "${seed:16}" $5
+	seed=`openssl rand -hex 4`
+        echo ../build/dmnd_dilute $L 0 0 0 $L 0 0 0 $L -p $p -o "${DB_REPO}" --seed "${seed}" $auxargs
         let index+=1
     done
 done
