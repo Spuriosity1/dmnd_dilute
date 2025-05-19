@@ -56,64 +56,6 @@ struct search_node {
     Chain<1> path;
 };
 
-
-
-/*
-inline std::vector<Chain<1>> find_paths_neighbours(Lattice& lat, Tetra* origin, Tetra* finish, unsigned len){
-    // finds all chains of length 'len' connecting p0 to p1
-
-    // ensure nothing is visited
-    for (auto& l : lat.get_links()){
-        l.visited = false;
-    }
-    std::stack<search_node> to_visit;
-    to_visit.push(search_node(origin, Chain<1>()));
-
-    Chain<0> expected_boundary;
-    expected_boundary[origin] = 1;
-    expected_boundary[finish] = -1;
-
-
-#ifdef DEBUG
-    cout<<"[find_paths_neighbours] expect boundary " << expected_boundary <<"\n";
-    cout<<"\nposition          \t| len(path)\t| d(path)\n";
-#endif
-
-    std::vector<Chain<1>> res;
-    while (!to_visit.empty()){
-        auto curr = to_visit.top();
-        cleanup_chain(curr.path);
-
-        to_visit.pop();
-        if (curr.path.size() == len){
-            if (curr.point == finish) {
-                assert( d(curr.path) == expected_boundary );
-                res.push_back(curr.path);
-            }
-            continue;
-        } 
-
-#ifdef DEBUG
-        cout<<curr.point->position<<"\t| "<< curr.path.size() <<"     \t| "<< d(curr.path)<<"\n";
-#endif
-
-        for (const auto& [l, m] : curr.point->coboundary){
-            Spin* ln = static_cast<Spin*>(l);
-            if (ln->visited) continue;
-            ln->visited = true;
-            Chain<1> this_ln; this_ln[l]=m;
-            for (auto [p2, n] : d(this_ln)){
-                if (p2 != curr.point){ 
-                    to_visit.push(search_node(p2,curr.path + this_ln));
-                }
-            }
-        }
-    }
-    return res;
-}
-*/
-
-
 bool operator<(rational::Rational a, rational::Rational b){
     a.make_denom_positive();
     b.make_denom_positive();
@@ -220,8 +162,33 @@ struct conn_components {
     bool wraps = false;
 };
 
+ipos_t min(ipos_t a, ipos_t b){
+    ipos_t c(a);
+    for (int i=0; i<3; i++){
+        if (c[i] > b[i]) c[i] = b[i];
+    }
+    return c;
+}
+
+
+ipos_t max(ipos_t a, ipos_t b){
+    ipos_t c(a);
+    for (int i=0; i<3; i++){
+        if (c[i] < b[i]) c[i] = b[i];
+    }
+    return c;
+}
+
+bool any_wraps(ipos_t X, double Lmin){
+    bool rv = 0;
+    for (int i=0; i<3; i++){
+        rv |= (X[i].num*X[i].num > Lmin/2 * X[i].denom*X[i].denom);
+    }
+    return rv;
+}
+
 template<Visitable T>
-inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T*>& elems, const rational::Rational& Lmin2){
+inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T*>& elems, double Lmin){
     /**
      * Starting from all points, either start a new cluster or expand cluster
      * until unable.
@@ -240,25 +207,41 @@ inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T
         if (root_cell->root != nullptr) continue;
 
         retval.push_back({});
+        auto& cell_union = retval.back();
+
+        ipos_t bb_min(root_cell->position);
+        ipos_t bb_max(root_cell->position);
+
         // start a DFS
         stack.push(root_cell);
         while(!stack.empty()){
             auto curr = stack.top();
-            retval.back().elems.insert(curr);
+            cell_union.elems.insert(curr);
             stack.pop();
             curr->root = root_cell;
             for(auto next : get_neighbours<T>(curr)){
                 if (next->root == nullptr){
                     stack.push(next);
                 } else if (next->root == root_cell) {
-                    // we have linked with the hive! Check if it was around a boundary -
+                    // we have linked with the hive! Update the bounding box
                     auto dx1 = curr->position - next->position;
-                    if (dot(dx1, dx1) > Lmin2/4){
-                        retval.back().wraps = true;
+                    if (any_wraps(dx1, Lmin)){
+                        bb_min = min(bb_min, curr->position);
+                        bb_min = min(bb_min, next->position);
+
+                        bb_max = max(bb_max, curr->position);
+                        bb_max = max(bb_max, next->position);
                     }
                 }
             }
         }
+
+        auto delta_bb = bb_max-bb_min;
+        for (int i=0; i<3; i++){ 
+            if (delta_bb[i] > Lmin - 2) {
+                cell_union.wraps=true;
+            }
+        }        
     }
 
     return retval;
@@ -328,6 +311,7 @@ inline json latstats_to_json(const Lattice& lat){
     return counts;
 }
 
+// returns a set of sizes of the conn_components, sorted low to high
 template <typename T>
 inline std::vector<size_t> get_sorted_sizes(const std::vector<conn_components<T>>& parts ){
     std::vector<size_t> size_set;
@@ -338,6 +322,7 @@ inline std::vector<size_t> get_sorted_sizes(const std::vector<conn_components<T>
     }
     return size_set;
 }
+
 
 template <typename T>
 inline bool test_wraps(const std::vector<conn_components<T>>& parts ){
@@ -386,6 +371,12 @@ void export_stats(
     of.close();
 }
 
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+/// MAIN PROGRAM
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
 
 int main (int argc, const char *argv[]) {
 
@@ -597,11 +588,12 @@ int main (int argc, const char *argv[]) {
         }
         assert(l2[i].num>0);
     }
-    rational::Rational Lmin2 = min(l2[0], min(l2[1],l2[2]));
+    auto Lmin2 = min(l2[0], min(l2[1],l2[2]));
+    double Lmin = sqrt(1.0*Lmin2.num/Lmin2.denom);
     
     // more complex: connected components 
-    auto connected_plaqs = find_connected(lat.plaqs, Lmin2);
-    auto connected_vols = find_connected(lat.vols, Lmin2);
+    auto connected_plaqs = find_connected(lat.plaqs, Lmin);
+    auto connected_vols = find_connected(lat.vols, Lmin);
 
 
     export_stats(statpath, lat, connected_plaqs, connected_vols);
