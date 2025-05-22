@@ -413,7 +413,6 @@ int main (int argc, const char *argv[]) {
     prog.add_argument("--neighbours", "-n")
         .scan<'i', int>()
         .nargs(argparse::nargs_pattern::at_least_one)
-        .default_value<std::vector<int>>({2})
         .store_into(neighbours);
     
     std::vector<int> spin_ids_to_delete;
