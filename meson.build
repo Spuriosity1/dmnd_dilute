@@ -8,7 +8,7 @@ if get_option('buildtype') == 'release'
   add_project_arguments('-Ofast',  language : 'cpp')
 endif
 
-latlib_dep = dependency('liblatindex')
+latlib_dep = dependency('liblatindex', version : '>=1.1')
 
 diluter_bin = executable('dmnd_dilute', 
   files('dmnd_dilute.cpp'),

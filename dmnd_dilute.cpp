@@ -7,13 +7,13 @@
 #include <iostream>
 #include <lattice_IO.hpp>
 #include <ostream>
+#include <stack>
 #include <preset_cellspecs.hpp>
 #include <UnitCellSpecifier.hpp>
 #include <algorithm>
 #include <queue>
 #include <random>
 #include <sstream>
-#include <stack>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -56,27 +56,6 @@ struct search_node {
     Chain<1> path;
 };
 
-bool operator<(rational::Rational a, rational::Rational b){
-    a.make_denom_positive();
-    b.make_denom_positive();
-    return a.num * b.denom < b.num*a.denom;
-}
-
-
-bool operator>(rational::Rational a, rational::Rational b){
-    a.make_denom_positive();
-    b.make_denom_positive();
-    return a.num * b.denom > b.num*a.denom;
-}
-
-rational::Rational min(rational::Rational a, rational::Rational b){
-    return (a<b) ? a : b;
-}
-
-
-rational::Rational max(rational::Rational a, rational::Rational b){
-    return (a>b) ? a : b;
-}
 
 void excise_path(Lattice& lat, Chain<1>& path, std::set<void*>& deleted_link_ptrs, std::vector<ipos_t>& deleted_link_locs){
     for (auto [l, _] : path){
@@ -182,13 +161,15 @@ ipos_t max(ipos_t a, ipos_t b){
 bool any_wraps(ipos_t X, double Lmin){
     bool rv = 0;
     for (int i=0; i<3; i++){
-        rv |= (X[i].num*X[i].num > Lmin/2 * X[i].denom*X[i].denom);
+        rv |= (X[i]*X[i] > Lmin/2 );
     }
     return rv;
 }
 
 template<Visitable T>
-inline std::vector<conn_components<T>> find_connected(std::unordered_map<sl_t, T*>& elems, double Lmin){
+inline std::vector<conn_components<T>> find_connected(
+		CellGeometry::SparseMap<sl_t, T*>& elems, 
+		double Lmin){
     /**
      * Starting from all points, either start a new cluster or expand cluster
      * until unable.
@@ -580,15 +561,14 @@ int main (int argc, const char *argv[]) {
     // Counting complete, output observables
     // Simple ones: raw counts
 
-    rational::Rational l2[3] = {0,0,0};
+    int64_t l2[3] = {0,0,0};
     for (int i=0; i<3; i++){
         for (int j=0; j<3; j++){
             l2[i] += lat.cell_vectors(j,i)*lat.cell_vectors(j,i);
         }
-        assert(l2[i].num>0);
     }
     auto Lmin2 = min(l2[0], min(l2[1],l2[2]));
-    double Lmin = sqrt(1.0*Lmin2.num/Lmin2.denom);
+    double Lmin = sqrt(1.0*Lmin2);
     
     // more complex: connected components 
     auto connected_plaqs = find_connected(lat.plaqs, Lmin);
