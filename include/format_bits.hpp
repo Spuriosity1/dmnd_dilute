@@ -9,11 +9,10 @@
 template<typename T>
 inline std::string comma_separate(const char* pname, std::vector<T> v){
     std::ostringstream oss;
-    oss<<pname;
-    char delim='=';
-    for (auto n : v){
-        oss << delim << n;
-        delim=','; 
+    oss<<pname<<"=";
+    for (size_t i=0; i<v.size(); i++){
+        oss << v[i];
+        if (i < v.size() -1 ) oss << ",";
     }
     oss << ";";
     return oss.str();

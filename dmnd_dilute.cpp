@@ -1,15 +1,10 @@
 #include <cassert>
-#include <cell_geometry.hpp>
 #include <argparse.hpp>
-#include <chain.hpp>
 #include <cstdio>
 #include <filesystem>
 #include <iostream>
 #include <lattice_IO.hpp>
 #include <ostream>
-#include <stack>
-#include <preset_cellspecs.hpp>
-#include <UnitCellSpecifier.hpp>
 #include <algorithm>
 #include <queue>
 #include <random>
@@ -19,7 +14,15 @@
 #include <unordered_set>
 #include <vector>
 #include <XoshiroCpp.hpp>
+
+// LatticeLab
+#include <chain.hpp>
+#include <cell_geometry.hpp>
+#include <preset_cellspecs.hpp>
+#include <UnitCellSpecifier.hpp>
+
 #include "format_bits.hpp"
+#include "geom_traverser.hpp"
 /**
  * Adds link disorder to a diaomnd lattice and removes any 
  * even length intermediaries.
@@ -36,15 +39,16 @@ struct Tetra : public Cell<0> {
 struct Spin : public Cell<1> {
     //bool visited = false;
     Tetra* origin = nullptr;
+    const Spin* root = nullptr;
 };
 
 struct Plaq : public Cell<2> {
-    bool visited = false;
+//    bool visited = false;
     const Plaq* root = nullptr;
 };
 
 struct Vol : public Cell<3> {
-    bool visited = false;
+ //   bool visited = false;
     const Vol* root = nullptr;
 };
 
@@ -129,104 +133,6 @@ inline std::vector<Chain<1>> find_defect_links(
 }
 
 
-template<typename T>
-concept Visitable = requires(T t) {
-    // { t.visited } -> std::same_as<bool&>;
-    { t.root } -> std::same_as<const T*&>;
-};
-
-template<Visitable T>
-struct conn_components {
-    std::set<T*> elems;
-    bool wraps = false;
-};
-
-ipos_t min(ipos_t a, ipos_t b){
-    ipos_t c(a);
-    for (int i=0; i<3; i++){
-        if (c[i] > b[i]) c[i] = b[i];
-    }
-    return c;
-}
-
-
-ipos_t max(ipos_t a, ipos_t b){
-    ipos_t c(a);
-    for (int i=0; i<3; i++){
-        if (c[i] < b[i]) c[i] = b[i];
-    }
-    return c;
-}
-
-bool any_wraps(ipos_t X, double Lmin){
-    bool rv = 0;
-    for (int i=0; i<3; i++){
-        rv |= (X[i]*X[i] > Lmin/2 );
-    }
-    return rv;
-}
-
-template<Visitable T>
-inline std::vector<conn_components<T>> find_connected(
-		CellGeometry::SparseMap<sl_t, T*>& elems, 
-		double Lmin){
-    /**
-     * Starting from all points, either start a new cluster or expand cluster
-     * until unable.
-     */
-    std::stack<T*> stack;
-
-    // mark all unvisited
-    for (auto& [_, v] : elems){
-         // v->visited = false;
-        v->root = nullptr;
-    }
-
-    std::vector<conn_components<T>> retval;
-
-    for (auto& [_, root_cell] : elems){
-        if (root_cell->root != nullptr) continue;
-
-        retval.push_back({});
-        auto& cell_union = retval.back();
-
-        ipos_t bb_min(root_cell->position);
-        ipos_t bb_max(root_cell->position);
-
-        // start a DFS
-        stack.push(root_cell);
-        while(!stack.empty()){
-            auto curr = stack.top();
-            cell_union.elems.insert(curr);
-            stack.pop();
-            curr->root = root_cell;
-            for(auto next : get_neighbours<T>(curr)){
-                if (next->root == nullptr){
-                    stack.push(next);
-                } else if (next->root == root_cell) {
-                    // we have linked with the hive! Update the bounding box
-                    auto dx1 = curr->position - next->position;
-                    if (any_wraps(dx1, Lmin)){
-                        bb_min = min(bb_min, curr->position);
-                        bb_min = min(bb_min, next->position);
-
-                        bb_max = max(bb_max, curr->position);
-                        bb_max = max(bb_max, next->position);
-                    }
-                }
-            }
-        }
-
-        auto delta_bb = bb_max-bb_min;
-        for (int i=0; i<3; i++){ 
-            if (delta_bb[i] > Lmin - 2) {
-                cell_union.wraps=true;
-            }
-        }        
-    }
-
-    return retval;
-}
 
 void sort_and_remove_duplicates(std::vector<int>& v){
     // Sort all of these so we don't muck up any indexing
@@ -315,11 +221,18 @@ inline bool test_wraps(const std::vector<conn_components<T>>& parts ){
 
 
 inline json percolstats_to_json(
+        const std::vector<conn_components<Spin>> connected_links,
         const std::vector<conn_components<Plaq>> connected_plaqs,
         const std::vector<conn_components<Vol>> connected_vols
         ) {
 
     json percolstats = {};
+
+    percolstats["n_link_parts"] = connected_links.size();
+    percolstats["link_part_nelem"] = get_sorted_sizes(connected_links);
+    percolstats["links_wrap"] = test_wraps(connected_links);
+
+
     percolstats["n_plaq_parts"] = connected_plaqs.size();
     percolstats["plaq_part_nelem"] = get_sorted_sizes(connected_plaqs);
     percolstats["plaqs_wrap"] = test_wraps(connected_plaqs);
@@ -335,6 +248,7 @@ inline json percolstats_to_json(
 void export_stats(
         const filesystem::path& path,
         const Lattice& lat,
+        const std::vector<conn_components<Spin>> connected_links,
         const std::vector<conn_components<Plaq>> connected_plaqs,
         const std::vector<conn_components<Vol>> connected_vols
         ){
@@ -345,7 +259,7 @@ void export_stats(
 
 
     j["counts"] = latstats_to_json(lat);
-    j["percolation"] = percolstats_to_json(connected_plaqs, connected_vols);
+    j["percolation"] = percolstats_to_json(connected_links, connected_plaqs, connected_vols);
 
     std::ofstream of(path); 
     of << j;
@@ -558,24 +472,15 @@ int main (int argc, const char *argv[]) {
         export_lattice(latpath, lat, deleted_link_locs);
     }
 
-    // Counting complete, output observables
-    // Simple ones: raw counts
+    // Counting complete. 
+    // Finding connected components:
+    double Lmin = calc_Lmin(lat.cell_vectors);
 
-    int64_t l2[3] = {0,0,0};
-    for (int i=0; i<3; i++){
-        for (int j=0; j<3; j++){
-            l2[i] += lat.cell_vectors(j,i)*lat.cell_vectors(j,i);
-        }
-    }
-    auto Lmin2 = min(l2[0], min(l2[1],l2[2]));
-    double Lmin = sqrt(1.0*Lmin2);
-    
-    // more complex: connected components 
+    auto connected_links = find_connected(lat.links, Lmin);
     auto connected_plaqs = find_connected(lat.plaqs, Lmin);
     auto connected_vols = find_connected(lat.vols, Lmin);
 
-
-    export_stats(statpath, lat, connected_plaqs, connected_vols);
+    export_stats(statpath, lat, connected_links, connected_plaqs, connected_vols);
 
     return 0;
 }

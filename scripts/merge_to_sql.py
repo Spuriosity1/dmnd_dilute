@@ -35,7 +35,7 @@ sqlite3.register_converter("array", convert_array)
 # Regex to parse metadata from filename
 FILENAME_REGEX = re.compile( r'Z1=([\d\-]+,[\d\-]+,[\d\-]+);'
                             r'Z2=([\d\-]+,[\d\-]+,[\d\-]+);'
-                            r'Z3=([\d\-]+,[\d\-]+,[\d\-]+);' r'nn=([\d,]+);'
+                            r'Z3=([\d\-]+,[\d\-]+,[\d\-]+);' r'nn=([\d,]*);'
                             r'p=([\d.]+);' r'seed=([a-f0-9]+);'
                             r'\.stats\.json$')
 
@@ -72,9 +72,15 @@ def create_database(db_path):
         plaqs INTEGER,
         points INTEGER,
         vols INTEGER,
+-- link stats
+        n_link_parts INTEGER,
+        links_wrap BOOLEAN,
+        link_part_nelem BLOB,
+-- plaquette stats
         n_plaq_parts INTEGER,
         plaqs_wrap BOOLEAN,
         plaq_part_nelem BLOB,
+-- volume stats
         n_vol_parts INTEGER,
         vols_wrap BOOLEAN,
         vol_part_nelem BLOB
@@ -90,10 +96,12 @@ def insert_record(cursor, metadata, stats_data):
         INSERT INTO stats (
             Z1, Z2, Z3, nn, p, seed,
             links, plaqs, points, vols,
+            n_link_parts, links_wrap, link_part_nelem,
             n_plaq_parts, plaqs_wrap, plaq_part_nelem,
             n_vol_parts, vols_wrap, vol_part_nelem
         ) VALUES (?, ?, ?, ?, ?, ?,
                   ?, ?, ?, ?,
+                  ?, ?, ?,
                   ?, ?, ?,
                   ?, ?, ?)
     ''', (
@@ -107,6 +115,9 @@ def insert_record(cursor, metadata, stats_data):
         counts.get('plaqs'),
         counts.get('points'),
         counts.get('vols'),
+        perc.get('n_link_parts'),
+        perc.get('links_wrap'),
+        np.array(perc.get('link_part_nelem')),
         perc.get('n_plaq_parts'),
         perc.get('plaqs_wrap'),
         np.array(perc.get('plaq_part_nelem')),
@@ -122,11 +133,11 @@ def process_directory(directory, db_path):
     for filename in os.listdir(directory):
         if filename.endswith(".stats.json"):
             filepath = os.path.join(directory, filename)
-            file_list.append(filename)
             try:
                 metadata = parse_filename_metadata(filename)
                 stats_data = parse_stats_file(filepath)
                 insert_record(cursor, metadata, stats_data)
+                file_list.append(filename)
             except Exception as e:
                 print(f"Error processing {filename}: {e}")
     conn.commit()
