@@ -8,14 +8,17 @@ if get_option('buildtype') == 'release'
   add_project_arguments('-Ofast',  language : 'cpp')
 endif
 
-latlib_dep = dependency('liblatindex', version : '>=1.1')
+latlib_dep = dependency('liblatindex', version : '>=1.1', required: true)
+json_dep = dependency('nlohmann_json', required: true)
 
 #latlib_proj = subproject('liblatindex')
 #latlib_dep = latlib_proj.get_variable('latlib_dep')
 
 diluter_bin = executable('dmnd_dilute', 
   files('dmnd_dilute.cpp'),
-  dependencies: latlib_dep,
+  dependencies: [latlib_dep,
+      json_dep
+    ],
   include_directories: 'include'
   )
 
