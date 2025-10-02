@@ -212,11 +212,19 @@ inline std::vector<size_t> get_sorted_sizes(const std::vector<conn_components<T>
 
 
 template <typename T>
-inline bool test_wraps(const std::vector<conn_components<T>>& parts ){
+inline std::pair<bool, std::vector<ipos_t>> test_wraps(const std::vector<conn_components<T>>& parts ){
+    std::vector<ipos_t> wrapping_cluster;
+    bool wraps = false;
     for (const auto& p : parts){
-        if (p.wraps) { return true; }
+        if (p.wraps) { 
+            wraps = true;
+            for (auto x : p.elems) {
+                wrapping_cluster.push_back(x->position);
+            }
+            break;
+        }
     }
-    return false;
+    return std::make_pair(wraps, wrapping_cluster);
 }
 
 
@@ -230,16 +238,20 @@ inline json percolstats_to_json(
 
     percolstats["n_link_parts"] = connected_links.size();
     percolstats["link_part_nelem"] = get_sorted_sizes(connected_links);
-    percolstats["links_wrap"] = test_wraps(connected_links);
-
+    auto tmp_link = test_wraps(connected_links);
+    percolstats["links_wrap"] = tmp_link.first;
+    percolstats["link_wrapping_cluster"] = tmp_link.second;
+    cout<< "Links wrap: " << percolstats["links_wrap"] <<"\n";
 
     percolstats["n_plaq_parts"] = connected_plaqs.size();
     percolstats["plaq_part_nelem"] = get_sorted_sizes(connected_plaqs);
-    percolstats["plaqs_wrap"] = test_wraps(connected_plaqs);
+    auto tmp_plaq = test_wraps(connected_plaqs);
+    percolstats["plaqs_wrap"] = tmp_plaq.first;
 
     percolstats["n_vol_parts"] = connected_vols.size();
     percolstats["vol_part_nelem"] = get_sorted_sizes(connected_vols);
-    percolstats["vols_wrap"] = test_wraps(connected_vols);
+    auto tmp_vol = test_wraps(connected_vols);
+    percolstats["vols_wrap"] = tmp_vol.first;
     return percolstats;
 }
 
@@ -474,11 +486,10 @@ int main (int argc, const char *argv[]) {
 
     // Counting complete. 
     // Finding connected components:
-    double Lmin = calc_Lmin(lat.cell_vectors);
 
-    auto connected_links = find_connected(lat.links, Lmin);
-    auto connected_plaqs = find_connected(lat.plaqs, Lmin);
-    auto connected_vols = find_connected(lat.vols, Lmin);
+    auto connected_links = find_connected(lat, lat.links);
+    auto connected_plaqs = find_connected(lat, lat.plaqs);
+    auto connected_vols = find_connected(lat, lat.vols);
 
     export_stats(statpath, lat, connected_links, connected_plaqs, connected_vols);
 

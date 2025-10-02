@@ -10,6 +10,9 @@ endif
 
 latlib_dep = dependency('liblatindex', version : '>=1.1')
 
+#latlib_proj = subproject('liblatindex')
+#latlib_dep = latlib_proj.get_variable('latlib_dep')
+
 diluter_bin = executable('dmnd_dilute', 
   files('dmnd_dilute.cpp'),
   dependencies: latlib_dep,
