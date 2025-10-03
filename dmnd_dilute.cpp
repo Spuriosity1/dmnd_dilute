@@ -210,6 +210,21 @@ inline std::vector<size_t> get_sorted_sizes(const std::vector<conn_components<T>
     return size_set;
 }
 
+template <typename T>
+inline std::map<size_t, size_t>
+size_histogram(const std::vector<conn_components<T>>& parts){
+    std::map<size_t, size_t> hist;
+    for (const auto&p : parts){
+        auto size = p.elems.size();
+        if (hist.find(size) == hist.end()) {
+          hist[size] = 1;
+        } else {
+          hist[size]++;
+        }
+    }
+    return hist;
+}
+
 
 template <typename T>
 inline std::pair<bool, std::vector<ipos_t>> test_wraps(const std::vector<conn_components<T>>& parts ){
@@ -235,21 +250,22 @@ inline json percolstats_to_json(
         ) {
 
     json percolstats = {};
+    percolstats["__version__"] = "1.1";
 
     percolstats["n_link_parts"] = connected_links.size();
-    percolstats["link_part_nelem"] = get_sorted_sizes(connected_links);
+    percolstats["link_cluster_dist"] = size_histogram(connected_links);
     auto tmp_link = test_wraps(connected_links);
     percolstats["links_wrap"] = tmp_link.first;
-    percolstats["link_wrapping_cluster"] = tmp_link.second;
+    // percolstats["link_wrapping_cluster"] = tmp_link.second;
     cout<< "Links wrap: " << percolstats["links_wrap"] <<"\n";
 
     percolstats["n_plaq_parts"] = connected_plaqs.size();
-    percolstats["plaq_part_nelem"] = get_sorted_sizes(connected_plaqs);
+    percolstats["plaq_cluster_dist"] = size_histogram(connected_plaqs);
     auto tmp_plaq = test_wraps(connected_plaqs);
     percolstats["plaqs_wrap"] = tmp_plaq.first;
 
     percolstats["n_vol_parts"] = connected_vols.size();
-    percolstats["vol_part_nelem"] = get_sorted_sizes(connected_vols);
+    percolstats["vol_cluster_dist"] = size_histogram(connected_vols);
     auto tmp_vol = test_wraps(connected_vols);
     percolstats["vols_wrap"] = tmp_vol.first;
     return percolstats;

@@ -87,8 +87,11 @@ inline std::vector<conn_components<T>> find_connected(
         if (component.elems.empty()) { continue; }
         auto root_cell = (*component.elems.begin())->root;
         auto x0 = root_cell -> position;
-        for (auto el : component.elems) {
-            if (lat.d2(el->position, x0) > Lmin2/4) {
+        
+        for (auto el = component.elems.rbegin(); 
+                el != component.elems.rend(); el++){
+//        for (auto el : component.elems) {
+            if (lat.d2((*el)->position, x0) > Lmin2/4) {
                 component.wraps = true;
                 break;
             }

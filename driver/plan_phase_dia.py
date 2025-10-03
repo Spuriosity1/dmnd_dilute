@@ -69,7 +69,7 @@ def main():
                     cmd += f" {delete_nn_args}"
 
                 if args.aux:
-                    cmd += f"{args.aux}"
+                    cmd += f" {args.aux}"
                 
                 # Print the command
                 print(cmd)

@@ -75,15 +75,15 @@ def create_database(db_path):
 -- link stats
         n_link_parts INTEGER,
         links_wrap BOOLEAN,
-        link_part_nelem BLOB,
+        link_cluster_dist BLOB,
 -- plaquette stats
         n_plaq_parts INTEGER,
         plaqs_wrap BOOLEAN,
-        plaq_part_nelem BLOB,
+        plaq_cluster_dist BLOB,
 -- volume stats
         n_vol_parts INTEGER,
         vols_wrap BOOLEAN,
-        vol_part_nelem BLOB
+        vol_cluster_dist BLOB
         )
                                    ''')
     conn.commit()
@@ -96,9 +96,9 @@ def insert_record(cursor, metadata, stats_data):
         INSERT INTO stats (
             Z1, Z2, Z3, nn, p, seed,
             links, plaqs, points, vols,
-            n_link_parts, links_wrap, link_part_nelem,
-            n_plaq_parts, plaqs_wrap, plaq_part_nelem,
-            n_vol_parts, vols_wrap, vol_part_nelem
+            n_link_parts, links_wrap, link_cluster_dist,
+            n_plaq_parts, plaqs_wrap, plaq_cluster_dist,
+            n_vol_parts, vols_wrap, vol_cluster_dist
         ) VALUES (?, ?, ?, ?, ?, ?,
                   ?, ?, ?, ?,
                   ?, ?, ?,
@@ -117,13 +117,13 @@ def insert_record(cursor, metadata, stats_data):
         counts.get('vols'),
         perc.get('n_link_parts'),
         perc.get('links_wrap'),
-        np.array(perc.get('link_part_nelem')),
+        np.array(perc.get('link_cluster_dist')),
         perc.get('n_plaq_parts'),
         perc.get('plaqs_wrap'),
-        np.array(perc.get('plaq_part_nelem')),
+        np.array(perc.get('plaq_cluster_dist')),
         perc.get('n_vol_parts'),
         perc.get('vols_wrap'),
-        np.array(perc.get('vol_part_nelem'))
+        np.array(perc.get('vol_cluster_dist'))
     ))
 
 def process_directory(directory, db_path):
