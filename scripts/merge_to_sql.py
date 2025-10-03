@@ -132,14 +132,18 @@ def process_directory(directory, db_path):
     file_list = []
     for filename in os.listdir(directory):
         if filename.endswith(".stats.json"):
-            filepath = os.path.join(directory, filename)
-            try:
-                metadata = parse_filename_metadata(filename)
-                stats_data = parse_stats_file(filepath)
-                insert_record(cursor, metadata, stats_data)
-                file_list.append(filename)
-            except Exception as e:
-                print(f"Error processing {filename}: {e}")
+            file_list.append(filename)
+
+    for j, file in enumerate(file_list):
+        print("%8d | %2.1f%% | %s " % ( j, 100.0 *  (j+1) / len(file_list)
+                                     , file))
+        filepath = os.path.join(directory, filename)
+        try:
+            metadata = parse_filename_metadata(filename)
+            stats_data = parse_stats_file(filepath)
+            insert_record(cursor, metadata, stats_data)
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
     conn.commit()
     conn.close()
 
