@@ -5,6 +5,9 @@ import numpy as np
 import secrets
 import argparse
 
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Run dmnd_dilute with varying parameters')
@@ -29,17 +32,20 @@ def main():
     # Check if the db_repo directory exists, create if needed
     if not os.path.isdir(args.db_repo):
         print(f"Error: specified db repo '{args.db_repo}' does not exist. Create?")
-        while True:
-            choice = input("Continue (y/n)? ")
-            if choice.lower() in ['y', 'yes']:
-                print("yes")
-                os.makedirs(args.db_repo, exist_ok=True)
-                break
-            elif choice.lower() in ['n', 'no']:
-                print("no")
-                sys.exit(1)
-            else:
-                print("invalid")
+        os.makedirs(args.db_repo, exist_ok=True)
+        eprint("Making directories, " + args.db_repo)
+
+#        while True:
+#            choice = input("Continue (y/n)? ")
+#            if choice.lower() in ['y', 'yes']:
+#                print("yes")
+#                os.makedirs(args.db_repo, exist_ok=True)
+#                break
+#            elif choice.lower() in ['n', 'no']:
+#                print("no")
+#                sys.exit(1)
+#            else:
+#                print("invalid")
      
 
     p_start, p_step, p_stop = args.prob_range
