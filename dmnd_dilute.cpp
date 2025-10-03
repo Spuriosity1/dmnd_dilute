@@ -250,7 +250,6 @@ inline json percolstats_to_json(
         ) {
 
     json percolstats = {};
-    percolstats["__version__"] = "1.1";
 
     percolstats["n_link_parts"] = connected_links.size();
     percolstats["link_cluster_dist"] = size_histogram(connected_links);
@@ -285,7 +284,7 @@ void export_stats(
 
     json j = {};
 
-
+    j["__version__"] = 1;
     j["counts"] = latstats_to_json(lat);
     j["percolation"] = percolstats_to_json(connected_links, connected_plaqs, connected_vols);
 
