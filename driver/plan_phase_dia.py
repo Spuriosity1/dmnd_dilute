@@ -70,7 +70,7 @@ def main():
                 seed = secrets.token_hex(4)
                 
                 # Construct the command
-                cmd = f"../build/dmnd_dilute {L} 0 0 0 {L} 0 0 0 {L} -p {p} -o {args.db_repo} --seed {seed}"
+                cmd = f"build/dmnd_dilute {L} 0 0 0 {L} 0 0 0 {L} -p {p} -o {args.db_repo} --seed {seed}"
                 if delete_nn_args:
                     cmd += f" {delete_nn_args}"
 

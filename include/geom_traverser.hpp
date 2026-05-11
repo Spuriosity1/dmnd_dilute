@@ -49,7 +49,7 @@ inline std::vector<conn_components<T>> find_connected(
     // has a pointer "root" that can be used to keep track of cluster ownership.
     
     // Init: mark all unvisited
-    for (auto& [_, v] : elems){
+    for (const auto& [_, v] : elems){
         v->root = nullptr;
     }
 
@@ -58,7 +58,7 @@ inline std::vector<conn_components<T>> find_connected(
     // Iterate through all elements, eznsuring that everyone gets a visit. 
     // We "colour" each element with a non-null pointer to a root element
     // Each nullptr node we visit is therefore the beginning of a new cluster.
-    for (auto& [_, root_cell] : elems){
+    for (const auto& [_, root_cell] : elems){
         if (root_cell->root != nullptr) continue; // already visited, skip
 
         component_list.push_back({});

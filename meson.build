@@ -15,7 +15,7 @@ json_dep = dependency('nlohmann_json', required: true)
 #latlib_dep = latlib_proj.get_variable('latlib_dep')
 
 diluter_bin = executable('dmnd_dilute', 
-  files('dmnd_dilute.cpp'),
+  files('src/dmnd_dilute.cpp'),
   dependencies: [latlib_dep,
       json_dep
     ],
