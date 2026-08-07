@@ -22,6 +22,14 @@ diluter_bin = executable('dmnd_dilute',
   include_directories: 'include'
   )
 
+count_neighbours_bin = executable('count_neighbours',
+  files('src/count_neighbours.cpp'),
+  dependencies: [latlib_dep,
+      json_dep
+    ],
+  include_directories: 'include'
+  )
+
 #diluter_nd_bin = executable('dmnd_dilute_nodelete',
 #  files('dmnd_dilute_nodelete.cpp'),
 #  dependencies: latlib_dep,

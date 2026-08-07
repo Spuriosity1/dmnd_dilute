@@ -166,6 +166,7 @@ void del_spins_get_dtetras(Lattice& lat, std::set<Spin*>& spins_to_delete, std::
 void export_lattice(
         const filesystem::path& path,
         const Lattice& lat,
+        const std::vector<ipos_t>& deleted_spin_locs,
         const std::vector<ipos_t>& deleted_link_locs
         ){
 
@@ -175,6 +176,7 @@ void export_lattice(
         json j = {};
         write_data(lat, j); // write the lattice data to j
 
+        j["deleted_spin_locs"] = deleted_spin_locs;
         j["defect_link_locs"] = deleted_link_locs;
 
         std::ofstream of(path); 
@@ -434,7 +436,7 @@ void determine_deleted_spins(
 
 int main (int argc, const char *argv[]) {
 
-    argparse::ArgumentParser prog("dmndlat");
+    argparse::ArgumentParser prog(argv[0]);
     prog.add_argument("Z1")
         .help("First lattice vector in primitive units (three integers) ")
         .nargs(3)
@@ -571,6 +573,13 @@ int main (int argc, const char *argv[]) {
         }
     }
 
+    // Record the positions of the directly-diluted spins before they are
+    // erased from the lattice (their pointers are invalidated by deletion).
+    std::vector<ipos_t> deleted_spin_locs;
+    for (const auto s : spins_to_yeet){
+        deleted_spin_locs.push_back(s->position);
+    }
+
     std::set<Tetra*> defect_tetras;
     del_spins_get_dtetras(lat, spins_to_yeet, defect_tetras);
 
@@ -631,7 +640,7 @@ int main (int argc, const char *argv[]) {
     
 
     if (save_lattice){
-        export_lattice(latpath, lat, deleted_link_locs);
+        export_lattice(latpath, lat, deleted_spin_locs, deleted_link_locs);
     }
 
     // Counting complete. 
