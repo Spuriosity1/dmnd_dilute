@@ -8,11 +8,14 @@ if get_option('buildtype') == 'release'
   add_project_arguments('-Ofast',  language : 'cpp')
 endif
 
-latlib_dep = dependency('liblatindex', version : '>=1.1', required: true)
+# Prefers a system install (via pkg-config); otherwise builds latticelab as a
+# meson subproject from subprojects/latticelab.wrap
+latlib_dep = dependency('liblatindex', version : '>=1.1',
+  required: true,
+  fallback : ['latticelab', 'latlib_dep'],
+  default_options : ['enable-tests=false', 'enable-benchmarks=false'],
+)
 json_dep = dependency('nlohmann_json', required: true)
-
-#latlib_proj = subproject('liblatindex')
-#latlib_dep = latlib_proj.get_variable('latlib_dep')
 
 diluter_bin = executable('dmnd_dilute', 
   files('src/dmnd_dilute.cpp'),
