@@ -1,0 +1,7 @@
+[wrap-git]
+url = https://github.com/Spuriosity1/latticelab.git
+revision = head
+depth = 1
+
+[provide]
+liblatindex = latlib_dep

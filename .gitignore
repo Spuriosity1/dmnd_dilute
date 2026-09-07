@@ -1,4 +1,7 @@
 .cache
+subprojects/*
+!/subprojects/*.wrap
+__pycache__
 .ignore
 .DS_Store
 env.sh
